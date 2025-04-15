@@ -33,7 +33,7 @@ docker-compose up -d
 
 Bu komut şunları yapacaktır:
 - Frontend uygulamasını oluşturup 80 portunda çalıştıracak
-- Backend API'yi oluşturup 3000 portunda çalıştıracak
+- Backend API'yi oluşturup 5000 portunda çalıştıracak
 - MongoDB veritabanını 27017 portunda çalıştıracak
 - Redis önbellek sistemini 6379 portunda çalıştıracak
 

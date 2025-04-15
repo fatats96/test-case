@@ -1,11 +1,14 @@
-export class CompanyA {
+import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
+import { IProvider } from './IProvider';
+
+export class CompanyA implements IProvider {
   getProviderName(): string {
     return 'Sigorta Şirketi A';
   }
 
-  async getQuote(plate: string) {
+  async getQuote(plate: string): Promise<IInsuranceQuoteModel> {
     await new Promise((resolve) =>
-      setTimeout(resolve, 500 + Math.random() * 1000),
+      setTimeout(resolve, 2500 + Math.random() * 31000),
     );
 
     if (Math.random() < 0.2) {

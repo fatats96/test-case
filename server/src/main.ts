@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpExceptionFilter } from './Filters/http-exception.filter';
 
 dotenv.config();
 
@@ -20,11 +21,14 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
+  app.useGlobalFilters(new HttpExceptionFilter());
+
   app.useGlobalPipes(new ValidationPipe());
+
+  app.enableCors();
 
   app.setGlobalPrefix('api');
 
-  // Swagger
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerBuilder());
   SwaggerModule.setup('swagger', app, swaggerDocument);
 

@@ -7,7 +7,7 @@ import { Quote, QuoteDocument } from './schemas/quote.schema';
 import { Model } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { InjectQueue } from '@nestjs/bull';
-import { Job, Queue } from 'bull';
+import { Queue } from 'bull';
 import { IQuoteModel } from 'src/models/quote.model';
 import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
 
@@ -15,7 +15,11 @@ import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
 export class QuoteService {
   constructor(
     @InjectModel(Quote.name) private quoteModel: Model<QuoteDocument>,
-    @InjectQueue('quotes') private quotesQueue: Queue,
+    @InjectQueue('quotes')
+    private quotesQueue: Queue<{
+      requestId: string;
+      plate: string;
+    }>,
   ) {}
 
   async processQuote(quoteQuery: CreateQuoteDTO) {
@@ -37,21 +41,32 @@ export class QuoteService {
 
     await newQuote.save();
 
-    const queueItems: Array<() => Promise<Job<any>>> = [];
-
-    for (const quote of newQuote.quotes) {
-      queueItems.push(() =>
-        this.quotesQueue.add('get-quote', {
-          requestId,
-          plate,
-          provider: quote.provider,
-        }),
-      );
-    }
-
-    void Promise.allSettled(queueItems.map((item) => item()));
+    void this.quotesQueue.add('get-quote', {
+      requestId,
+      plate,
+    });
 
     return this.mapQuoteDocumentToResponse(newQuote);
+  }
+
+  async getQuoteStatus(requestId: string) {
+    const quote = await this.quoteModel.findOne({ requestId }).exec();
+
+    if (!quote) {
+      return null;
+    }
+
+    return this.mapQuoteDocumentToResponse(quote);
+  }
+
+  async getQuoteStatusByPlate(plate: string) {
+    const quote = await this.quoteModel.findOne({ plate }).exec();
+
+    if (!quote) {
+      return null;
+    }
+
+    return this.mapQuoteDocumentToResponse(quote);
   }
 
   private mapQuoteDocumentToResponse(quote: QuoteDocument): IQuoteModel {

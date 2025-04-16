@@ -6,20 +6,17 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Quote, QuoteDocument } from './schemas/quote.schema';
 import { Model } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 import { IQuoteModel } from 'src/models/quote.model';
 import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
+import { QuoteEmitter } from './emitters/quote.emitter';
+import { QuotesProcessor } from './processors/quotes.processor';
 
 @Injectable()
 export class QuoteService {
   constructor(
     @InjectModel(Quote.name) private quoteModel: Model<QuoteDocument>,
-    @InjectQueue('quotes')
-    private quotesQueue: Queue<{
-      requestId: string;
-      plate: string;
-    }>,
+    private quoteEmitter: QuoteEmitter,
+    private quotesProcessor: QuotesProcessor,
   ) {}
 
   async processQuote(quoteQuery: CreateQuoteDTO) {
@@ -38,15 +35,17 @@ export class QuoteService {
       successCount: 0,
       failureCount: 0,
     });
-
     await newQuote.save();
 
-    void this.quotesQueue.add('get-quote', {
+    void this.quotesProcessor.addQuoteProcessingJob({ requestId, plate });
+
+    return {
       requestId,
       plate,
-    });
-
-    return this.mapQuoteDocumentToResponse(newQuote);
+      status: 'processing',
+      message: 'Teklif isteği alındı ve işleniyor',
+      statusUrl: `/api/quote/status/${requestId}`,
+    };
   }
 
   async getQuoteStatus(requestId: string) {

@@ -15,7 +15,7 @@ export class ProviderQuoteRequestConsumer {
   ) {}
 
   @Process('request')
-  async requestProviderQuote(job: Job<ProviderQuoteRequestJob>) {
+  requestProviderQuote(job: Job<ProviderQuoteRequestJob>) {
     const { requestId, plate, provider } = job.data;
 
     this.quoteEmitter.emitProviderQuoteRequestedEvent(
@@ -38,16 +38,29 @@ export class ProviderQuoteRequestConsumer {
         return { success: false, message: 'Şirket bulunamadı' };
       }
 
-      const quote = await providerInstance.getQuote(plate);
+      providerInstance
+        .getQuote(plate)
+        .then((quote) => {
+          this.quoteEmitter.emitProviderQuoteCompletedEvent(
+            requestId,
+            plate,
+            provider,
+            quote,
+          );
+        })
+        .catch((error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
 
-      this.quoteEmitter.emitProviderQuoteCompletedEvent(
-        requestId,
-        plate,
-        provider,
-        quote,
-      );
+          this.quoteEmitter.emitProviderQuoteFailedEvent(
+            requestId,
+            plate,
+            provider,
+            errorMessage,
+          );
+        });
 
-      return { success: true, provider, quote };
+      return { success: true, provider };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';

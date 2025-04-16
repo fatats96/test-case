@@ -45,6 +45,7 @@ export class QuoteService {
       status: 'processing',
       message: 'Teklif isteği alındı ve işleniyor',
       statusUrl: `/api/quote/status/${requestId}`,
+      createdAt: new Date(),
     };
   }
 

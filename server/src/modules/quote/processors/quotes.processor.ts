@@ -1,73 +1,55 @@
-import { Process, Processor } from '@nestjs/bull';
-import { ProviderFactory } from 'src/modules/mock/provider.factory';
-import { Job } from 'bull';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { IProvider } from 'src/modules/mock/IProvider';
-import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
+import { Injectable } from '@nestjs/common';
+import {
+  ProviderQuoteRequestJob,
+  QuoteCompletionJob,
+  QuoteProcessingJob,
+  QuoteQueueNames,
+} from 'src/queues/quote.queue';
 
-interface IQuoteJob {
-  requestId: string;
-  plate: string;
-}
-
-@Processor('quotes')
+@Injectable()
 export class QuotesProcessor {
+  constructor(
+    @InjectQueue(QuoteQueueNames.QUOTE_PROCESSING)
+    private quoteProcessingQueue: Queue<QuoteProcessingJob>,
+    @InjectQueue(QuoteQueueNames.PROVIDER_QUOTE_REQUEST)
+    private providerQuoteRequestQueue: Queue<ProviderQuoteRequestJob>,
+    @InjectQueue(QuoteQueueNames.QUOTE_COMPLETION)
+    private quoteCompletionQueue: Queue<QuoteCompletionJob>,
+  ) {}
   private readonly insuranceProviders: (IProvider | null)[] = [];
 
-  constructor(
-    private readonly providerFactory: ProviderFactory,
-    private readonly eventEmitter: EventEmitter2,
-  ) {
-    this.insuranceProviders = [
-      providerFactory.GetCompanyProvider('Sigorta Şirketi A'),
-      providerFactory.GetCompanyProvider('Sigorta Şirketi B'),
-      providerFactory.GetCompanyProvider('Sigorta Şirketi C'),
-    ];
+  async addQuoteProcessingJob(data: QuoteProcessingJob) {
+    return this.quoteProcessingQueue.add('process', data, {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+      timeout: 30000,
+    });
   }
 
-  @Process('get-quote')
-  getQuote(job: Job<IQuoteJob>) {
-    for (const provider of this.insuranceProviders) {
-      const quote = provider?.getQuote(job.data.plate);
-
-      quote
-        ?.then(this.processSuccessfulQuote(job.data.requestId))
-        .catch((error: Error) =>
-          this.processFailedQuote(
-            job.data.requestId,
-            provider!.getProviderName(),
-            error,
-          ),
-        );
-    }
-
-    return true;
+  async addProviderQuoteRequestJob(data: ProviderQuoteRequestJob) {
+    return this.providerQuoteRequestQueue.add('request', data, {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 1000,
+      },
+      timeout: 30000,
+    });
   }
 
-  private processSuccessfulQuote(requestId: string) {
-    return (quote: IInsuranceQuoteModel) => {
-      this.eventEmitter.emit('quote.request.completed', { requestId, quote });
-    };
-  }
-
-  private processFailedQuote(
-    requestId: string,
-    provider: string,
-    error: Error,
-  ) {
-    const failedQuote = {
-      provider,
-      price: 0,
-      coverageDetails: '',
-      isSuccess: false,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      errorMessage: `System error: ${error.message}`,
-      status: 'failed',
-      timestamp: new Date(),
-    };
-    this.eventEmitter.emit('quote.request.completed', {
-      requestId,
-      quote: failedQuote,
+  async addQuoteCompletionJob(data: QuoteCompletionJob) {
+    return this.quoteCompletionQueue.add('complete', data, {
+      attempts: 2,
+      backoff: {
+        type: 'fixed',
+        delay: 2000,
+      },
     });
   }
 }

@@ -3,57 +3,35 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Quote, QuoteDocument } from '../schemas/quote.schema';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
-import { IInsuranceQuoteModel } from 'src/models/insurance-quote.model';
+import { ProviderFactory } from 'src/modules/mock/provider.factory';
+import { QuoteEmitter } from '../emitters/quote.emitter';
+import {
+  IQuoteRequestedEvent,
+  QuoteEventTypesEnum,
+} from 'src/events/quote-events';
 
 @Injectable()
 export class QuoteRequestListener {
+  private readonly companyNames = [
+    'Sigorta Şirketi A',
+    'Sigorta Şirketi B',
+    'Sigorta Şirketi C',
+  ];
+
   constructor(
     @InjectModel(Quote.name) private quoteModel: Model<QuoteDocument>,
+    private readonly providerFactory: ProviderFactory,
+    private readonly quoteEmitter: QuoteEmitter,
   ) {}
 
-  @OnEvent('quote.request.completed')
-  async handleQuoteRequestCompleted(data: {
-    requestId: string;
-    quote: IInsuranceQuoteModel;
-  }) {
-    console.log('I ll handle the data', data);
-    await this.updateQuoteWithProviderResult(data.requestId, data.quote);
-  }
-
-  private async updateQuoteWithProviderResult(
-    requestId: string,
-    providerQuote: IInsuranceQuoteModel,
-  ): Promise<void> {
-    const quote = await this.quoteModel.findOne({ requestId }).exec();
-
-    if (!quote) {
-      console.log(`Quote not found for requestId: ${requestId}`);
-      return;
+  @OnEvent(QuoteEventTypesEnum.QUOTE_REQUESTED)
+  handleQuoteRequested(event: IQuoteRequestedEvent) {
+    for (const companyName of this.companyNames) {
+      this.quoteEmitter.emitProviderQuoteRequestedEvent(
+        event.requestId,
+        companyName,
+        event.plate,
+      );
     }
-
-    const providerIndex = quote.quotes.findIndex(
-      (q) => q.provider === providerQuote.provider,
-    );
-
-    if (providerIndex !== -1) {
-      quote.quotes[providerIndex] = providerQuote;
-    } else {
-      quote.quotes.push(providerQuote);
-    }
-
-    quote.successCount = quote.quotes.filter((q) => q.isSuccess).length;
-    quote.failureCount = quote.quotes.filter(
-      (q) => q.status === 'failed',
-    ).length;
-
-    // Tüm quote'lar tamamlandıysa status'u 'completed' olarak işaretle
-    const pendingQuotes = quote.quotes.filter(
-      (q) => q.status === 'pending',
-    ).length;
-    if (pendingQuotes === 0) {
-      quote.status = 'completed';
-    }
-
-    await quote.save();
   }
 }

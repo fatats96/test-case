@@ -10,7 +10,6 @@ export class CompanyC implements IProvider {
     await new Promise((resolve) =>
       setTimeout(resolve, 500 + Math.random() * 13000),
     );
-    console.log('resolving ', this.getProviderName());
 
     if (Math.random() < 0.3) {
       return {

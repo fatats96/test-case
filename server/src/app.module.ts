@@ -5,6 +5,7 @@ import { QuoteModule } from './modules/quote/quote.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RequestLoggerMiddleware } from './middlewares/request-log.middleware';
+import { QueueMonitorModule } from './modules/queue-monitor/queue-monitor.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { RequestLoggerMiddleware } from './middlewares/request-log.middleware';
       inject: [ConfigService],
     }),
     QuoteModule,
+    QueueMonitorModule,
   ],
 })
 export class AppModule implements NestModule {
